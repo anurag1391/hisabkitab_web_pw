@@ -17,7 +17,6 @@ test.describe.serial(
         let parentOptions = [];
 
 
-        // Before Each
         test.beforeEach(async ({ loggedPage }) => {
 
             groups = new LedgerGroupsPage(loggedPage);
@@ -32,37 +31,22 @@ test.describe.serial(
         });
 
 
-        // TC_Groups_001
         test(
             'TC_Groups_001 - Verify predefined groups',
             async () => {
+                const missingGroups = predefinedGroups.filter(
+                    name => !parentOptions.includes(name)
+                );
 
-                const missingGroups = [];
-
-                for (const name of predefinedGroups) {
-
-                    if (!(await groups.groupExists(name))) {
-                        missingGroups.push(name);
-                    }
-
-                }
-
-                if (missingGroups.length) {
-                    console.warn(
-                        `Predefined groups not found: ${missingGroups.join(', ')}`
-                    );
-                } else {
-                    console.log('All predefined groups were found.');
-                }
-
-                // Root groups are verified, not auto-created.
-                // Add Group requires a Parent Group.
+                expect(
+                    missingGroups,
+                    `Predefined groups missing: ${missingGroups.join(', ')}`
+                ).toEqual([]);
 
             }
         );
 
 
-        // TC_Groups_002
         test(
             'TC_Groups_002 - Create subgroup',
             async () => {
@@ -101,14 +85,13 @@ test.describe.serial(
                 );
 
                 await expect(
-                    groups.findGroupRow(name)
-                ).toBeVisible();
+                    groups.findGroupRow(name).locator('td').nth(1)
+                ).toHaveText(groups.groupNameMatcher(name));
 
             }
         );
 
 
-        // TC_Groups_003
         test(
             'TC_Add_Groups_003 - Reject empty group name',
             async ({ loggedPage }) => {
@@ -150,7 +133,6 @@ test.describe.serial(
         );
 
 
-        // TC_Groups_004
         test(
             'TC_Add_Groups_004 - Reject missing Parent Group',
             async ({ loggedPage }) => {
@@ -193,7 +175,6 @@ test.describe.serial(
         );
 
 
-        // TC_Groups_006
         test(
             'TC_Groups_006 - Edit subgroup name and parent',
             async () => {
@@ -233,7 +214,6 @@ test.describe.serial(
         );
 
 
-        // TC_Groups_007
         test(
             'TC_Groups_007 - Delete unused subgroup',
             async () => {
@@ -256,17 +236,11 @@ test.describe.serial(
         );
 
 
-        // TC_Groups_008
         test(
             'TC_Groups_008 - Prevent deletion of group in use',
             async () => {
 
-                const name = process.env.IN_USE_GROUP;
-
-                test.skip(
-                    !name,
-                    'Set IN_USE_GROUP in .env.'
-                );
+                const name = process.env.IN_USE_GROUP || 'Flipkart Expenses';
 
                 const row = groups.findGroupRow(name);
 
@@ -299,7 +273,6 @@ test.describe.serial(
         );
 
 
-        // TC_Groups_009
         test(
             'TC_Groups_009 - Reject duplicate group name',
             async ({ loggedPage }) => {
@@ -322,7 +295,6 @@ test.describe.serial(
                     groupRunData.duplicateName;
 
 
-                // Create group if it does not exist
                 if (!(await groups.groupExists(name))) {
 
                     await groups.openAdd();
@@ -339,7 +311,6 @@ test.describe.serial(
                 }
 
 
-                // Attempt duplicate creation
                 await groups.openAdd();
 
                 await groups.saveGroup(

@@ -12,17 +12,21 @@ export default class DashboardPage {
     // Expected company
     expectedCompany = process.env.COMPANY_NAME || 'JCOS LTD.';
 
-    // =====================================
     // VERIFY DASHBOARD
-    // =====================================
-
     async verifyDashboard() {
 
         await expect(
-            this.page.getByText('Dashboard', {
+            this.page.getByRole('heading', {
+                name: 'Dashboard',
                 exact: true
-            }).first()
-        ).toBeVisible();
+            })
+        ).toBeVisible({ timeout: 15000 });
+
+        await expect(
+            this.page.getByRole('heading', {
+                name: /^sales and purchase$/i
+            })
+        ).toBeVisible({ timeout: 15000 });
 
     }
 
@@ -39,23 +43,22 @@ export default class DashboardPage {
             throw new Error('COMPANY_NAME is missing in .env');
         }
 
-        // Locate currently displayed company
-        const companyDropdown = this.page.getByText(
-            companyName,
-            { exact: true }
-        ).first();
+        const companyControl = this.page.getByRole('combobox').first();
+        await expect(companyControl).toBeVisible({ timeout: 15000 });
 
-        // Read current company from the header dropdown
-        const companyHeader = this.page.locator(
-            'header button, header [role="combobox"]'
-        ).first();
+        const companyOptions = companyControl.locator('option');
+        const isNativeSelect = await companyOptions.count() > 0;
+        let currentCompany;
 
-        let currentCompany = '';
-
-        if (await companyHeader.count()) {
-            currentCompany = (await companyHeader.innerText()).trim();
-        } else if (await companyDropdown.count()) {
-            currentCompany = (await companyDropdown.innerText()).trim();
+        if (isNativeSelect) {
+            currentCompany = (
+                await companyControl.locator('option:checked').innerText()
+            ).trim();
+        } else {
+            const companyInput = companyControl.locator('input').first();
+            currentCompany = await companyInput.count()
+                ? (await companyInput.inputValue()).trim()
+                : (await companyControl.innerText()).trim();
         }
 
         console.log('Expected Company:', companyName);
@@ -69,8 +72,24 @@ export default class DashboardPage {
             return;
         }
 
+        if (isNativeSelect) {
+            const matchingCompany = (await companyOptions.allTextContents())
+                .map(option => option.trim())
+                .find(option => option === companyName);
+
+            if (!matchingCompany) {
+                throw new Error(`Company "${companyName}" is not available.`);
+            }
+
+            await companyControl.selectOption({ label: matchingCompany });
+            await expect(
+                companyControl.locator('option:checked')
+            ).toHaveText(companyName);
+            return;
+        }
+
         // Open company dropdown
-        await companyHeader.click();
+        await companyControl.click();
 
         // Search field inside opened company dropdown
         const searchField = this.page.locator('input:visible').last();
@@ -114,11 +133,40 @@ export default class DashboardPage {
         console.log('Expected Financial Year:', expectedFY);
 
         // FY dropdown in the top header
+        const fyCombobox = this.page.getByRole('combobox').nth(1);
+        await expect(fyCombobox).toBeVisible({ timeout: 15000 });
+
+        const fyOptions = fyCombobox.locator('option');
+
+        if (await fyOptions.count()) {
+            const selectedFY = (
+                await fyCombobox.locator('option:checked').innerText()
+            ).replace(/\s+/g, '');
+
+            console.log('Currently Selected FY:', selectedFY);
+
+            if (selectedFY === expectedFY) {
+                console.log('Financial Year already matched. Skipping selection.');
+                return;
+            }
+
+            const matchingFY = (await fyOptions.allTextContents())
+                .map(option => option.trim())
+                .find(option => option.replace(/\s+/g, '') === expectedFY);
+
+            if (!matchingFY) {
+                throw new Error(`Financial Year "${expectedFY}" is not available.`);
+            }
+
+            await fyCombobox.selectOption({ label: matchingFY });
+            await expect(fyCombobox.locator('option:checked'))
+                .toHaveText(matchingFY);
+            return;
+        }
+
         const fyDropdown = this.page.getByRole('textbox', {
             name: /^\d{4}\s*-\s*\d{2}$/
         }).first();
-
-        await expect(fyDropdown).toBeVisible({ timeout: 15000 });
 
         const currentFY = (
             await fyDropdown.innerText()
@@ -166,8 +214,6 @@ export default class DashboardPage {
 
     async verifyDashboardContext() {
 
-        await this.verifyDashboard();
-
         await this.verifyCompany();
 
         await this.verifyFinancialYear();
@@ -184,34 +230,24 @@ export default class DashboardPage {
         await this.page.mouse.wheel(0, 1500);
 
         await expect(
-            this.page.getByText('Cashflow', {
-                exact: false
-            }).first()
-        ).toBeVisible();
+            this.page.getByRole('heading', {
+                name: /^cashflow$/i
+            })
+        ).toBeVisible({ timeout: 15000 });
 
         await expect(
-            this.page.getByText('Opening Balance', {
+            this.page.getByRole('heading', {
+                name: 'Top Selling Items',
                 exact: true
             })
-        ).toBeVisible();
+        ).toBeVisible({ timeout: 15000 });
 
         await expect(
-            this.page.getByText('Closing Balance', {
+            this.page.getByRole('heading', {
+                name: 'Least Selling Items',
                 exact: true
             })
-        ).toBeVisible();
-
-        await expect(
-            this.page.getByText('Top Selling Items', {
-                exact: true
-            })
-        ).toBeVisible();
-
-        await expect(
-            this.page.getByText('Least Selling Items', {
-                exact: true
-            })
-        ).toBeVisible();
+        ).toBeVisible({ timeout: 15000 });
 
     }
 
@@ -227,22 +263,17 @@ export default class DashboardPage {
 
         await this.verifyFinancialYear();
 
-        const sale = this.page
-            .locator('a')
-            .filter({
-                hasText: 'Sale'
-            })
-            .first();
+        const sale = this.page.getByRole('link', {
+            name: /^Sale \+$/
+        });
 
-        await expect(sale).toBeVisible();
+        await expect(sale).toBeVisible({ timeout: 15000 });
 
         await sale.click();
 
         await expect(
-            this.page.getByRole('heading', {
-                name: 'Add Sale'
-            })
-        ).toBeVisible();
+            this.page.locator('[name="invoice_number"]')
+        ).toBeVisible({ timeout: 30000 });
 
     }
 

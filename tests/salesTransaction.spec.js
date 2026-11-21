@@ -2,9 +2,9 @@
 import { test, expect } from '../fixtures/baseTest.js';
 import DashboardPage from '../pages/dashboard.page.js';
 import SalesPage from '../pages/sales.page.js';
-import { getRandomParty } from '../utils/apiManager.js';
 
-test('Sales Transaction Full Flow', async ({ loggedPage, request }) => {
+test('Sales Transaction Full Flow', async ({ loggedPage }) => {
+test.setTimeout(90000);
 
 const dashboard=new DashboardPage(loggedPage);
 const sales=new SalesPage(loggedPage);
@@ -15,27 +15,45 @@ await sales.verifyHeading();
 
 await sales.verifyInvoiceDate();
 
-let party='Counter Sales';
+const partyName = 'Counter Sales';
+const itemName = 'Aitomateitem';
+const quantity = '1';
+await sales.selectParty(partyName);
 
-try{
+await sales.processItemTable(itemName, quantity);
 
-party=await getRandomParty(request);
+const savedInvoice = await sales.handleInvoiceNumber();
 
-}catch{}
+const transactionDetails = {
+    invoiceNumber: savedInvoice,
+    partyName,
+    itemName,
+    quantity
+};
+await sales.verifyTransactionDetails(transactionDetails);
 
-await sales.selectParty(party);
-
-await sales.processItemTable();
-
-const invoiceField = loggedPage.locator('[name="invoice_number"]');
-await expect(invoiceField).not.toHaveValue('', { timeout: 15000 });
-const savedInvoice = await invoiceField.inputValue();
-
+const saveResponsePromise = loggedPage.waitForResponse(
+    response =>
+        response.url().includes('/react-api/sale-transactions') &&
+        response.request().method() === 'POST',
+    { timeout: 30000 }
+);
 await sales.saveTransaction();
+const saveResponse = await saveResponsePromise;
+expect(saveResponse.ok()).toBeTruthy();
 
 expect(savedInvoice).not.toBe('');
 
-await expect(loggedPage).toHaveURL(/\/company\/sales(?:\?.*)?$/, { timeout: 20000 });
+await loggedPage.goto('/company/sales', { waitUntil: 'domcontentloaded' });
+await expect(
+    loggedPage.getByRole('heading', { name: 'Sale', exact: true })
+).toBeVisible({ timeout: 15000 });
+
+const dateRange = loggedPage.getByRole('textbox', {
+    name: 'dd-mm-yyyy - dd-mm-yyyy'
+});
+await dateRange.fill('01-01-2020 - 31-12-2030');
+await dateRange.press('Enter');
 
 const invoiceSearch = loggedPage.getByRole('row').nth(2).getByRole('textbox').nth(3);
 await invoiceSearch.fill(savedInvoice);

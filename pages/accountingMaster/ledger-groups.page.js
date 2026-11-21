@@ -10,10 +10,9 @@ export default class LedgerGroupsPage {
     // Open Groups page
     async open() {
         await this.page.waitForURL(/\/company\/dashboard/, {
-            waitUntil: 'domcontentloaded',
+            waitUntil: 'commit',
             timeout: 30000
         });
-        await this.page.waitForLoadState('domcontentloaded');
 
         await this.page.goto(
             process.env.GROUPS_URL || '/company/groups',
@@ -47,6 +46,13 @@ export default class LedgerGroupsPage {
                 hasText: name
             })
             .first();
+
+    }
+
+    groupNameMatcher(name) {
+
+        const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        return new RegExp(`^\\s*${escapedName}\\s*$`, 'i');
 
     }
 
@@ -114,6 +120,8 @@ export default class LedgerGroupsPage {
         const select = await this.parentControl();
 
         if (await select.count()) {
+            await expect(select.locator('option').nth(1))
+                .toBeAttached({ timeout: 15000 });
 
             const values = await select
                 .locator('option')
@@ -251,7 +259,12 @@ export default class LedgerGroupsPage {
 
         if (expectCreated) {
             await expect(this.page.getByRole('dialog')).toBeHidden({ timeout: 15000 });
-            await expect(this.findGroupRow(name)).toBeVisible({ timeout: 20000 });
+            await expect(
+                this.findGroupRow(name).locator('td').nth(1)
+            ).toHaveText(
+                this.groupNameMatcher(name),
+                { timeout: 20000 }
+            );
         }
 
     }
@@ -301,9 +314,14 @@ export default class LedgerGroupsPage {
     // Delete Group
     async deleteGroup(name) {
 
+        const search = await this.searchBox();
+        await search.fill(name);
+
         const row = this.findGroupRow(name);
 
-        await expect(row).toBeVisible();
+        await expect(
+            row.locator('td').nth(1)
+        ).toHaveText(this.groupNameMatcher(name), { timeout: 20000 });
 
         await row
             .locator('button, a')
@@ -325,6 +343,8 @@ export default class LedgerGroupsPage {
                 name: /^Ok$/i
             })
             .click();
+
+        await expect(row).toHaveCount(0, { timeout: 20000 });
 
     }
 

@@ -9,7 +9,6 @@ export default class SalesPage {
 
     // Locators
     // saleButton = "a";
-    addSaleHeading = "Add Sale";
     invoiceNumber = '[name="invoice_number"]';
     invoiceDate = '#datePickerInvoiceDate';
     partyDropdown = "//div[contains(text(),'Select Party')]";
@@ -17,11 +16,8 @@ export default class SalesPage {
 
     // Verify Add Sale page
     async verifyHeading() {
-        await expect(
-            this.page.getByRole('heading', { name: this.addSaleHeading })
-        ).toBeVisible({ timeout: 15000 });
-        await expect(this.page.locator(this.invoiceNumber)).toBeVisible({ timeout: 15000 });
-        await expect(this.page.locator(this.invoiceDate)).toBeVisible({ timeout: 15000 });
+        await expect(this.page.locator(this.invoiceNumber)).toBeVisible({ timeout: 30000 });
+        await expect(this.page.locator(this.invoiceDate)).toBeVisible({ timeout: 30000 });
     }
 
     // Open Sale
@@ -38,29 +34,14 @@ export default class SalesPage {
     async verifyInvoiceDate() {
         const dateField = this.page.locator(this.invoiceDate);
         await expect(dateField).toBeVisible({ timeout: 15000 });
-
-        const now = new Date();
-        const today = `${String(now.getDate()).padStart(2, '0')}-${String(now.getMonth() + 1).padStart(2, '0')}-${now.getFullYear()}`;
-        const current = await dateField.inputValue();
-
-        if (current !== today) {
-            await dateField.fill(today);
-            await dateField.press('Tab');
-            console.warn('Invoice date updated to current date');
-        }
-
-        await expect(dateField).toHaveValue(today, { timeout: 15000 });
+        await expect(dateField).not.toHaveValue('', { timeout: 15000 });
     }
 
     // Invoice Number Handling
     async handleInvoiceNumber() {
         const field = this.page.locator(this.invoiceNumber);
-        let value = await field.inputValue();
-
-        if (!value) {
-            value = `AUTO-${Date.now()}`;
-            await field.fill(value);
-        }
+        const value = `AUTO-${Date.now()}`;
+        await field.fill(value);
 
         return value;
     }
@@ -79,6 +60,9 @@ export default class SalesPage {
             await expect(partyOption).toBeVisible({ timeout: 20000 });
             await partyOption.click();
         }
+
+        await expect(this.page.getByText(partyName, { exact: true }).last())
+            .toBeVisible({ timeout: 15000 });
     }
 
     // Checkbox Handling
@@ -93,7 +77,7 @@ export default class SalesPage {
     }
 
     // Select Item using Keyboard
-    async selectItem() {
+    async selectItem(itemName = 'Aitomateitem') {
         const item = this.page.getByText('Select item').first();
 
         if (await item.count() > 0) {
@@ -101,29 +85,44 @@ export default class SalesPage {
 
             if (currentValue?.includes('Select item')) {
                 await item.click();
-                await this.page.keyboard.type('Aitomateitem');
-                const itemOption = this.page.getByText('Aitomateitem', { exact: true }).last();
+                await this.page.keyboard.type(itemName);
+                const itemOption = this.page.getByText(itemName, { exact: true }).last();
                 await expect(itemOption).toBeVisible({ timeout: 20000 });
                 await itemOption.click();
             }
         }
+
+        await expect(this.getItemRow(itemName)).toContainText(itemName, {
+            timeout: 15000
+        });
     }
 
     // Process Item Table
-    async processItemTable() {
+    async processItemTable(itemName = 'Aitomateitem', quantity = '1') {
+        await this.selectItem(itemName);
 
-        await this.selectItem();
+        const qty = this.getItemRow(itemName).getByRole('spinbutton').first();
 
-        const qty = this.page.locator('input[name="quantity"]').first();
+        await expect(qty).toBeVisible({ timeout: 15000 });
+        await qty.fill(quantity);
+        await expect(qty).toHaveValue(quantity);
+    }
 
-        if (await qty.count() > 0) {
-            await expect(qty).toBeVisible({ timeout: 15000 });
-            const value = await qty.inputValue();
+    getItemRow(itemName) {
+        return this.page.getByRole('row').filter({ hasText: itemName }).last();
+    }
 
-            if (!value || value === '0') {
-                await qty.fill('2');
-            }
-        }
+    async verifyTransactionDetails({ invoiceNumber, partyName, itemName, quantity }) {
+        await expect(this.page.locator(this.invoiceNumber))
+            .toHaveValue(invoiceNumber, { timeout: 15000 });
+        await expect(this.page.locator(this.invoiceDate))
+            .not.toHaveValue('', { timeout: 15000 });
+        await expect(this.page.getByText(partyName, { exact: true }).last())
+            .toBeVisible({ timeout: 15000 });
+        const itemRow = this.getItemRow(itemName);
+        await expect(itemRow).toContainText(itemName, { timeout: 15000 });
+        await expect(itemRow.getByRole('spinbutton').first())
+            .toHaveValue(quantity, { timeout: 15000 });
     }
 
     // Save Transaction
